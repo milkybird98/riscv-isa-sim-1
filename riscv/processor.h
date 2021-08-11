@@ -186,6 +186,9 @@ struct state_t
 
   reg_t mtval2;
   reg_t mtinst;
+  reg_t hdsbase;
+  reg_t hdslimit;
+  reg_t hdsoffset;
   reg_t hstatus;
   reg_t hideleg;
   reg_t hedeleg;

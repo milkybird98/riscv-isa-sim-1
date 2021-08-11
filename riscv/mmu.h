@@ -96,6 +96,7 @@ public:
 #endif
 
   // template for functions that load an aligned value from memory
+  // TODO: implement stage 1-2 DS translation logic here, before the check of TLB data
   #define load_func(type, prefix, xlate_flags) \
     inline type##_t prefix##_##type(reg_t addr, bool require_alignment = false) { \
       if (unlikely(addr & (sizeof(type##_t)-1))) { \

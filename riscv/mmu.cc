@@ -56,12 +56,14 @@ reg_t mmu_t::translate(reg_t addr, reg_t len, access_type type, uint32_t xlate_f
   bool virt = (proc) ? proc->state.v : false;
   bool hlvx = xlate_flags & RISCV_XLATE_VIRT_HLVX;
   reg_t mode = proc->state.prv;
+  // deal with MPRV and guest access from hypervisor, nothing to do with it
   if (type != FETCH) {
     if (!proc->state.debug_mode && get_field(proc->state.mstatus, MSTATUS_MPRV)) {
       mode = get_field(proc->state.mstatus, MSTATUS_MPP);
       if (get_field(proc->state.mstatus, MSTATUS_MPV) && mode != PRV_M)
         virt = true;
     }
+    // used by hlv/hsv/hlvx instructions
     if (xlate_flags & RISCV_XLATE_VIRT) {
       virt = true;
       mode = get_field(proc->state.hstatus, HSTATUS_SPVP);
@@ -304,16 +306,41 @@ reg_t mmu_t::pmp_homogeneous(reg_t addr, reg_t len)
 
 reg_t mmu_t::s2xlate(reg_t gva, reg_t gpa, access_type type, access_type trap_type, bool virt, bool hlvx)
 {
+  // 未启用虚拟化无需进行二阶翻译
   if (!virt)
     return gpa;
 
+  // 二阶翻译未启用页表，无需进行翻译，hPA=gPA
   vm_info vm = decode_vm_info(proc->max_xlen, true, 0, proc->get_state()->hgatp);
   if (vm.levels == 0)
     return gpa;
 
+  if ((proc->state.hdsbase & 0x1) == 0x1) {
+    reg_t page_mask = (reg_t(1) << PGSHIFT) - 1;
+    reg_t hdsbase = proc->state.hdsbase & page_mask;
+    reg_t hdslimit = proc->state.hdslimit & page_mask;
+    reg_t hdsoffset = proc->state.hdsoffset & page_mask;
+
+    if(likely(gpa >= hdsbase && gpa < hdslimit)) {
+      reg_t paddr = 0;
+      if ((proc->state.hdsoffset & 0x1) == 0x1){
+        paddr = gpa - hdsoffset;
+      }else{
+        paddr = gpa + hdsoffset;
+      }
+      return paddr;
+    }
+  }
+
   bool mxr = proc->state.mstatus & MSTATUS_MXR;
 
   reg_t base = vm.ptbase;
+
+  // TODO: add stage 2 DS translation logic here, with the ppte and pmp_ok check
+  // check the HS-reg to process the gPA->hPA translation
+  // get reg val from proc->state->*reg* 
+  // 命中后不需要进入循环，循环中的pmp检测为对二级页表表单项的数据进行的检测，与最终访存无关  
+
   for (int i = vm.levels - 1; i >= 0; i--) {
     int ptshift = i * vm.idxbits;
     int idxbits = (i == (vm.levels - 1)) ? vm.idxbits + vm.widenbits : vm.idxbits;
@@ -401,13 +428,19 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, bool virt, bool hlvx
     vm.levels = 0;
 
   reg_t base = vm.ptbase;
+  // TODO: the optional position for stage 1 DS (gVA->gPA, hVA->hPA)
+  // 判断是否命中一阶段DS，如果命中则使用DS实现va到pa的翻译，再调用s2xlate实现gpa到hpa的翻译
+  // 由于此处为了兼容对巨页页表项的处理，return被至于循环中，当翻译到最后一级或当前页表项为叶子节点时返回pa地址
+  // 故，当DS命中时，不进入循环；stage 1 DS 中所需要进行的pmp检测在s2xlate（二级页表表单项）和外部对数据的访问前进行
   for (int i = vm.levels - 1; i >= 0; i--) {
     int ptshift = i * vm.idxbits;
     reg_t idx = (addr >> (PGSHIFT + ptshift)) & ((1 << vm.idxbits) - 1);
 
     // check that physical address of PTE is legal
+    // TODO: change s2xlate func to support DS
     auto pte_paddr = s2xlate(addr, base + idx * vm.ptesize, LOAD, type, virt, false);
     auto ppte = sim->addr_to_mem(pte_paddr);
+    // 这里是对表单项数据的pmp监测，对 stage 2 DS 中，这是其所需的pmp监测（一级页表表单项）
     if (!ppte || !pmp_ok(pte_paddr, vm.ptesize, LOAD, PRV_S))
       throw_access_exception(virt, addr, type);
 

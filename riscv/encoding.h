@@ -2880,6 +2880,9 @@
 #define CSR_HVIP 0x645
 #define CSR_HTINST 0x64a
 #define CSR_HGATP 0x680
+#define CSR_HDSBASE 0x681
+#define CSR_HDSLIMIT 0x682
+#define CSR_HDSOFFSET 0x683
 #define CSR_HGEIP 0xe12
 #define CSR_UTVT 0x7
 #define CSR_UNXTI 0x45

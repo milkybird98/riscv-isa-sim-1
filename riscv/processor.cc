@@ -343,6 +343,10 @@ void state_t::reset(reg_t max_isa)
   scause = 0;
   mtval2 = 0;
   mtinst = 0;
+  // 描述二阶段DS的寄存器
+  hdsbase = 0;
+  hdslimit = 0;
+  hdsoffset = 0;
   hstatus = 0;
   hideleg = 0;
   hedeleg = 0;
@@ -1133,6 +1137,23 @@ void processor_t::set_csr(int which, reg_t val)
       }
       break;
     }
+    case CSR_HDSBASE: {
+      reg_t mask = (reg_t(1) << PGSHIFT) - 1;
+      mask |= 0x1;
+      state.hdsbase = val & mask;
+      break;
+    }
+    case CSR_HDSLIMIT: {
+      reg_t mask = (reg_t(1) << PGSHIFT) - 1;
+      state.hdslimit = val & mask;
+      break;
+    }
+    case CSR_HDSOFFSET: {
+      reg_t mask = (reg_t(1) << PGSHIFT) - 1;
+      mask |= 0x1;
+      state.hdsoffset = val & mask;
+      break;
+    }
     case CSR_HSTATUS: {
       reg_t mask = HSTATUS_VTSR | HSTATUS_VTW
                    | (supports_impl(IMPL_MMU) ? HSTATUS_VTVM : 0)
@@ -1632,6 +1653,9 @@ reg_t processor_t::get_csr(int which, insn_t insn, bool write, bool peek)
     case CSR_HIP: ret(state.mip & MIP_HS_MASK);
     case CSR_HVIP: ret(state.mip & MIP_VS_MASK);
     case CSR_HTINST: ret(state.htinst);
+    case CSR_HDSBASE: ret(state.hdsbase);
+    case CSR_HDSLIMIT: ret(state.hdslimit);
+    case CSR_HDSOFFSET: ret(state.hdsoffset);
     case CSR_HGATP: {
       if (!state.v && get_field(state.mstatus, MSTATUS_TVM))
         require_privilege(PRV_M);
