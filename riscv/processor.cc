@@ -334,6 +334,9 @@ void state_t::reset(reg_t max_isa)
   medeleg = 0;
   mideleg = 0;
   mcounteren = 0;
+  sdsbase = 0;
+  sdslimit = 0;
+  sdsoffset = 0;
   scounteren = 0;
   sepc = 0;
   stval = 0;
@@ -360,6 +363,9 @@ void state_t::reset(reg_t max_isa)
   vsepc = 0;
   vscause = 0;
   vstval = 0;
+  vsdsbase = 0;
+  vsdslimit = 0;
+  vsdsoffset = 0;
   vsatp = 0;
 
   dpc = 0;
@@ -1053,6 +1059,35 @@ void processor_t::set_csr(int which, reg_t val)
       state.mie = (state.mie & ~mask) | (val & mask);
       break;
     }
+    case CSR_SDSBASE: {
+      reg_t mask = ~((reg_t(1) << PGSHIFT) - 1);
+      mask |= DS_BASE_ENABLE_MASK;
+      if (state.v){
+        state.vsdsbase = val & mask;
+      }else{
+        state.sdsbase = val & mask;
+      }
+      break;
+    }
+    case CSR_SDSLIMIT: {
+      reg_t mask = ~((reg_t(1) << PGSHIFT) - 1);
+      if (state.v){
+        state.vsdslimit = val & mask;
+      }else{
+        state.sdslimit = val & mask;
+      }
+      break;
+    }
+    case CSR_SDSOFFSET: {
+      reg_t mask = ~((reg_t(1) << PGSHIFT) - 1);
+      mask |= DS_OFFSET_MINUS_MASK;
+      if (state.v){
+        state.vsdsoffset = val & mask;
+      }else{
+        state.sdsoffset = val & mask;
+      }
+      break;
+    }
     case CSR_SATP:
       if (!supports_impl(IMPL_MMU))
         val = 0;
@@ -1138,19 +1173,19 @@ void processor_t::set_csr(int which, reg_t val)
       break;
     }
     case CSR_HDSBASE: {
-      reg_t mask = (reg_t(1) << PGSHIFT) - 1;
-      mask |= 0x1;
+      reg_t mask = ~((reg_t(1) << PGSHIFT) - 1);
+      mask |= DS_BASE_ENABLE_MASK;
       state.hdsbase = val & mask;
       break;
     }
     case CSR_HDSLIMIT: {
-      reg_t mask = (reg_t(1) << PGSHIFT) - 1;
+      reg_t mask = ~((reg_t(1) << PGSHIFT) - 1);
       state.hdslimit = val & mask;
       break;
     }
     case CSR_HDSOFFSET: {
-      reg_t mask = (reg_t(1) << PGSHIFT) - 1;
-      mask |= 0x1;
+      reg_t mask = ~((reg_t(1) << PGSHIFT) - 1);
+      mask |= DS_OFFSET_MINUS_MASK;
       state.hdsoffset = val & mask;
       break;
     }
@@ -1256,6 +1291,23 @@ void processor_t::set_csr(int which, reg_t val)
     case CSR_VSIP: {
       reg_t mask = state.hideleg & MIP_VSSIP;
       state.mip = (state.mip & ~mask) | ((val << 1) & mask);
+      break;
+    }
+    case CSR_VSDSBASE: {
+      reg_t mask = ~((reg_t(1) << PGSHIFT) - 1);
+      mask |= DS_BASE_ENABLE_MASK;
+      state.vsdsbase = val & mask;
+      break;
+    }
+    case CSR_VSDSLIMIT: {
+      reg_t mask = ~((reg_t(1) << PGSHIFT) - 1);
+      state.vsdslimit = val & mask;
+      break;
+    }
+    case CSR_VSDSOFFSET: {
+      reg_t mask = ~((reg_t(1) << PGSHIFT) - 1);
+      mask |= DS_OFFSET_MINUS_MASK;
+      state.vsdsoffset = val & mask;
       break;
     }
     case CSR_VSATP:
@@ -1590,6 +1642,27 @@ reg_t processor_t::get_csr(int which, insn_t insn, bool write, bool peek)
         if (max_xlen > xlen)
           ret(state.scause | ((state.scause >> (max_xlen-1)) << (xlen-1)));
         ret(state.scause);
+      }
+    }
+    case CSR_SDSBASE: {
+      if (state.v){
+        ret(state.vsdsbase);
+      }else{
+        ret(state.sdsbase);
+      }
+    }
+    case CSR_SDSLIMIT: {
+      if (state.v){
+        ret(state.vsdslimit);
+      }else{
+        ret(state.sdslimit);
+      }
+    }
+    case CSR_SDSOFFSET: {
+      if (state.v){
+        ret(state.vsdsoffset);
+      }else{
+        ret(state.sdsoffset);
       }
     }
     case CSR_SATP: {

@@ -311,19 +311,25 @@ reg_t mmu_t::s2xlate(reg_t gva, reg_t gpa, access_type type, access_type trap_ty
     return gpa;
 
   // 二阶翻译未启用页表，无需进行翻译，hPA=gPA
+  fprintf(stderr,"gpa %016lx\n", gpa);
+
   vm_info vm = decode_vm_info(proc->max_xlen, true, 0, proc->get_state()->hgatp);
   if (vm.levels == 0)
     return gpa;
 
-  if ((proc->state.hdsbase & 0x1) == 0x1) {
+  fprintf(stderr,"hdsbase %016lx\n", proc->state.hdsbase);
+  if (proc->state.hdsbase & DS_BASE_ENABLE_MASK) {
     reg_t page_mask = (reg_t(1) << PGSHIFT) - 1;
-    reg_t hdsbase = proc->state.hdsbase & page_mask;
-    reg_t hdslimit = proc->state.hdslimit & page_mask;
-    reg_t hdsoffset = proc->state.hdsoffset & page_mask;
+    reg_t hdsbase = proc->state.hdsbase & ~page_mask;
+    reg_t hdslimit = proc->state.hdslimit & ~page_mask;
+    reg_t hdsoffset = proc->state.hdsoffset & ~page_mask;
 
+  fprintf(stderr,"hdslimit %016lx\n", hdslimit);
     if(likely(gpa >= hdsbase && gpa < hdslimit)) {
+    fprintf(stderr,"hdsoffset %016lx\n", proc->state.hdsoffset);
+
       reg_t paddr = 0;
-      if ((proc->state.hdsoffset & 0x1) == 0x1){
+      if (proc->state.hdsoffset & DS_OFFSET_MINUS_MASK){
         paddr = gpa - hdsoffset;
       }else{
         paddr = gpa + hdsoffset;
@@ -348,31 +354,46 @@ reg_t mmu_t::s2xlate(reg_t gva, reg_t gpa, access_type type, access_type trap_ty
 
     // check that physical address of PTE is legal
     auto pte_paddr = base + idx * vm.ptesize;
+    fprintf(stderr,"pte_paddr %016lx\n", pte_paddr);
     auto ppte = sim->addr_to_mem(pte_paddr);
     if (!ppte || !pmp_ok(pte_paddr, vm.ptesize, LOAD, PRV_S)) {
       throw_access_exception(virt, gva, trap_type);
     }
 
     reg_t pte = vm.ptesize == 4 ? from_target(*(target_endian<uint32_t>*)ppte) : from_target(*(target_endian<uint64_t>*)ppte);
+    fprintf(stderr,"pte %016lx\n", pte);
     reg_t ppn = (pte & ~reg_t(PTE_ATTR)) >> PTE_PPN_SHIFT;
+    fprintf(stderr,"ppn %016lx\n", ppn);
 
     if (pte & PTE_RSVD) {
+      fprintf(stderr,"1\n", ppn);
       break;
     } else if (PTE_TABLE(pte)) { // next level of page table
+      fprintf(stderr,"2\n", ppn);
+
       if (pte & (PTE_D | PTE_A | PTE_U | PTE_N | PTE_PBMT))
         break;
       base = ppn << PGSHIFT;
     } else if (!(pte & PTE_V) || (!(pte & PTE_R) && (pte & PTE_W))) {
+      fprintf(stderr,"3\n", ppn);
+
       break;
     } else if (!(pte & PTE_U)) {
+      fprintf(stderr,"4\n", ppn);
+
       break;
     } else if (type == FETCH || hlvx ? !(pte & PTE_X) :
                type == LOAD          ? !(pte & PTE_R) && !(mxr && (pte & PTE_X)) :
                                        !((pte & PTE_R) && (pte & PTE_W))) {
+      fprintf(stderr,"5\n", ppn);
+      
       break;
     } else if ((ppn & ((reg_t(1) << ptshift) - 1)) != 0) {
+      fprintf(stderr,"6\n", ppn);
+      
       break;
     } else {
+      fprintf(stderr,"7\n", ppn);
       reg_t ad = PTE_A | ((type == STORE) * PTE_D);
 #ifdef RISCV_ENABLE_DIRTY
       // set accessed and possibly dirty bits.
@@ -416,6 +437,52 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, bool virt, bool hlvx
   if (vm.levels == 0)
     return s2xlate(addr, addr & ((reg_t(2) << (proc->xlen-1))-1), type, type, virt, hlvx) & ~page_mask; // zero-extend from xlen
 
+  fprintf(stderr,"addr %016lx\n", addr);
+  if (!virt) {
+  fprintf(stderr,"sdsbase %016lx\n", proc->state.sdsbase);
+    if (proc->state.sdsbase & DS_BASE_ENABLE_MASK) {
+      reg_t sdsbase = proc->state.sdsbase & ~page_mask;
+      reg_t sdslimit = proc->state.sdslimit & ~page_mask;
+      reg_t sdsoffset = proc->state.sdsoffset & ~page_mask;
+
+  fprintf(stderr,"sdslimit %016lx\n", sdslimit);
+
+      if(likely(addr >= sdsbase && addr < sdslimit)) {
+        reg_t paddr = 0;
+        if (proc->state.sdsoffset & DS_OFFSET_MINUS_MASK){
+          paddr = addr - sdsoffset;
+        }else{
+          paddr = addr + sdsoffset;
+        }
+        
+        fprintf(stderr,"paddr %016lx\n", paddr);
+        return paddr & ~page_mask;
+      }
+    }
+  }else{
+    fprintf(stderr,"vsdsbase %016lx\n", proc->state.vsdsbase);
+    if (proc->state.vsdsbase & DS_BASE_ENABLE_MASK) {
+      reg_t sdsbase = proc->state.vsdsbase & ~page_mask;
+      reg_t sdslimit = proc->state.vsdslimit & ~page_mask;
+      reg_t sdsoffset = proc->state.vsdsoffset & ~page_mask;
+
+    fprintf(stderr,"vsdslimit %016lx\n", sdslimit);
+
+      if(likely(addr >= sdsbase && addr < sdslimit)) {
+        reg_t paddr = 0;
+        if (proc->state.vsdsoffset & DS_OFFSET_MINUS_MASK){
+          paddr = addr - sdsoffset;
+        }else{
+          paddr = addr + sdsoffset;
+        }
+
+        fprintf(stderr,"vsdsoffset %016lx\n", sdsoffset);
+        
+        return s2xlate(paddr, paddr & ((reg_t(2) << (proc->xlen-1))-1), type, type, virt, hlvx) & ~page_mask;
+      }
+    }
+  }
+
   bool s_mode = mode == PRV_S;
   bool sum = (virt ? proc->state.vsstatus : proc->state.mstatus) & MSTATUS_SUM;
   bool mxr = (proc->state.mstatus | (virt ? proc->state.vsstatus : 0)) & MSTATUS_MXR;
@@ -439,13 +506,17 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, bool virt, bool hlvx
     // check that physical address of PTE is legal
     // TODO: change s2xlate func to support DS
     auto pte_paddr = s2xlate(addr, base + idx * vm.ptesize, LOAD, type, virt, false);
+    fprintf(stderr,"s1_pte_paddr %016lx\n", pte_paddr);
     auto ppte = sim->addr_to_mem(pte_paddr);
     // 这里是对表单项数据的pmp监测，对 stage 2 DS 中，这是其所需的pmp监测（一级页表表单项）
     if (!ppte || !pmp_ok(pte_paddr, vm.ptesize, LOAD, PRV_S))
       throw_access_exception(virt, addr, type);
 
     reg_t pte = vm.ptesize == 4 ? from_target(*(target_endian<uint32_t>*)ppte) : from_target(*(target_endian<uint64_t>*)ppte);
+    fprintf(stderr,"s1_pte %016lx\n", pte);
+
     reg_t ppn = (pte & ~reg_t(PTE_ATTR)) >> PTE_PPN_SHIFT;
+    fprintf(stderr,"s1_ppn %016lx\n", ppn);
 
     if (pte & PTE_RSVD) {
       break;
