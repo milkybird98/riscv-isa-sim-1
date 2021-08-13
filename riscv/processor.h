@@ -176,6 +176,9 @@ struct state_t
   reg_t medeleg;
   reg_t mideleg;
   uint32_t mcounteren;
+  reg_t sdsbase;
+  reg_t sdslimit;
+  reg_t sdsoffset;
   uint32_t scounteren;
   reg_t sepc;
   reg_t stval;
@@ -196,6 +199,9 @@ struct state_t
   reg_t htval;
   reg_t htinst;
   reg_t hgatp;
+  reg_t vsdsbase;
+  reg_t vsdslimit;
+  reg_t vsdsoffset;
   reg_t vsstatus;
   reg_t vstvec;
   reg_t vsscratch;

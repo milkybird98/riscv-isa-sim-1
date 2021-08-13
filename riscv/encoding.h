@@ -128,6 +128,9 @@
 #define MCONTROL_MATCH_MASK_LOW  4
 #define MCONTROL_MATCH_MASK_HIGH 5
 
+#define DS_BASE_ENABLE_MASK      (1<<0)
+#define DS_OFFSET_MINUS_MASK     (1<<0)
+
 #define MIP_USIP            (1 << IRQ_U_SOFT)
 #define MIP_SSIP            (1 << IRQ_S_SOFT)
 #define MIP_VSSIP           (1 << IRQ_VS_SOFT)
@@ -2859,6 +2862,9 @@
 #define CSR_STVAL 0x143
 #define CSR_SIP 0x144
 #define CSR_SATP 0x180
+#define CSR_SDSBASE 0x181
+#define CSR_SDSLIMIT 0x182
+#define CSR_SDSOFFSET 0x183
 #define CSR_VSSTATUS 0x200
 #define CSR_VSIE 0x204
 #define CSR_VSTVEC 0x205
@@ -2868,6 +2874,9 @@
 #define CSR_VSTVAL 0x243
 #define CSR_VSIP 0x244
 #define CSR_VSATP 0x280
+#define CSR_VSDSBASE 0x281
+#define CSR_VSDSLIMIT 0x282
+#define CSR_VSDSOFFSET 0x283
 #define CSR_HSTATUS 0x600
 #define CSR_HEDELEG 0x602
 #define CSR_HIDELEG 0x603
