@@ -318,18 +318,19 @@ reg_t mmu_t::s2xlate(reg_t gva, reg_t gpa, access_type type, access_type trap_ty
     return gpa;
 
   fprintf(stderr,"hdsbase %016lx\n", proc->state.hdsbase);
-  if (proc->state.hdsbase & DS_BASE_ENABLE_MASK) {
-    reg_t page_mask = (reg_t(1) << PGSHIFT) - 1;
-    reg_t hdsbase = proc->state.hdsbase & ~page_mask;
-    reg_t hdslimit = proc->state.hdslimit & ~page_mask;
-    reg_t hdsoffset = proc->state.hdsoffset & ~page_mask;
+  reg_t max_xlen = proc->max_xlen;
+  if (proc->state.hdsbase & DS_BASE_ENABLE_MASK(max_xlen)) {
+      reg_t ds_mask = (max_xlen == 32) ? (reg_t(1) << 22) - 1 : (reg_t(1) << 44) - 1;
+      reg_t hdsbase = (proc->state.hdsbase & ds_mask) << 12;
+      reg_t hdslimit = (proc->state.hdslimit & ds_mask) << 12;
+      reg_t hdsoffset = (proc->state.hdsoffset & ds_mask) << 12;
 
   fprintf(stderr,"hdslimit %016lx\n", hdslimit);
     if(likely(gpa >= hdsbase && gpa < hdslimit)) {
     fprintf(stderr,"hdsoffset %016lx\n", proc->state.hdsoffset);
 
       reg_t paddr = 0;
-      if (proc->state.hdsoffset & DS_OFFSET_MINUS_MASK){
+      if (proc->state.hdsoffset & DS_OFFSET_MINUS_MASK(max_xlen)){
         paddr = gpa - hdsoffset;
       }else{
         paddr = gpa + hdsoffset;
@@ -440,16 +441,18 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, bool virt, bool hlvx
   fprintf(stderr,"addr %016lx\n", addr);
   if (!virt) {
   fprintf(stderr,"sdsbase %016lx\n", proc->state.sdsbase);
-    if (proc->state.sdsbase & DS_BASE_ENABLE_MASK) {
-      reg_t sdsbase = proc->state.sdsbase & ~page_mask;
-      reg_t sdslimit = proc->state.sdslimit & ~page_mask;
-      reg_t sdsoffset = proc->state.sdsoffset & ~page_mask;
+  reg_t max_xlen = proc->max_xlen;
+    if (proc->state.sdsbase & DS_BASE_ENABLE_MASK(max_xlen)) {
+      reg_t ds_mask = (max_xlen == 32) ? (reg_t(1) << 22) - 1 : (reg_t(1) << 44) - 1;
+      reg_t sdsbase = (proc->state.sdsbase & ds_mask) << 12;
+      reg_t sdslimit = (proc->state.sdslimit & ds_mask) << 12;
+      reg_t sdsoffset = (proc->state.sdsoffset & ds_mask) << 12;
 
-  fprintf(stderr,"sdslimit %016lx\n", sdslimit);
+      fprintf(stderr,"sdslimit %016lx\n", sdslimit);
 
       if(likely(addr >= sdsbase && addr < sdslimit)) {
         reg_t paddr = 0;
-        if (proc->state.sdsoffset & DS_OFFSET_MINUS_MASK){
+        if (proc->state.sdsoffset & DS_OFFSET_MINUS_MASK(max_xlen)){
           paddr = addr - sdsoffset;
         }else{
           paddr = addr + sdsoffset;
@@ -461,16 +464,18 @@ reg_t mmu_t::walk(reg_t addr, access_type type, reg_t mode, bool virt, bool hlvx
     }
   }else{
     fprintf(stderr,"vsdsbase %016lx\n", proc->state.vsdsbase);
-    if (proc->state.vsdsbase & DS_BASE_ENABLE_MASK) {
-      reg_t sdsbase = proc->state.vsdsbase & ~page_mask;
-      reg_t sdslimit = proc->state.vsdslimit & ~page_mask;
-      reg_t sdsoffset = proc->state.vsdsoffset & ~page_mask;
+    reg_t max_xlen = proc->max_xlen;
+    if (proc->state.vsdsbase & DS_BASE_ENABLE_MASK(max_xlen)) {
+      reg_t ds_mask = (max_xlen == 32) ? (reg_t(1) << 22) - 1 : (reg_t(1) << 44) - 1;
+      reg_t sdsbase = (proc->state.vsdsbase & ds_mask) << 12;
+      reg_t sdslimit = (proc->state.vsdslimit & ds_mask) << 12;
+      reg_t sdsoffset = (proc->state.vsdsoffset & ds_mask) << 12;
 
     fprintf(stderr,"vsdslimit %016lx\n", sdslimit);
 
       if(likely(addr >= sdsbase && addr < sdslimit)) {
         reg_t paddr = 0;
-        if (proc->state.vsdsoffset & DS_OFFSET_MINUS_MASK){
+        if (proc->state.vsdsoffset & DS_OFFSET_MINUS_MASK(max_xlen)){
           paddr = addr - sdsoffset;
         }else{
           paddr = addr + sdsoffset;

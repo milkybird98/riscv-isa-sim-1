@@ -128,8 +128,8 @@
 #define MCONTROL_MATCH_MASK_LOW  4
 #define MCONTROL_MATCH_MASK_HIGH 5
 
-#define DS_BASE_ENABLE_MASK      (1<<0)
-#define DS_OFFSET_MINUS_MASK     (1<<0)
+#define DS_BASE_ENABLE_MASK(xlen)      (1<<(xlen-1))
+#define DS_OFFSET_MINUS_MASK(xlen)     (1<<(xlen-1))
 
 #define MIP_USIP            (1 << IRQ_U_SOFT)
 #define MIP_SSIP            (1 << IRQ_S_SOFT)
